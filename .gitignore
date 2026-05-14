@@ -1,0 +1,11 @@
+*.json
+*.iso
+*.qcow2
+*.img
+*.vhdx
+*.vmdk
+*.log
+*.cache
+*.tmp
+*.bak
+*.swp

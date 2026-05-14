@@ -1,0 +1,36 @@
+[customizations.installer.modules]
+enable = ["org.fedoraproject.Anaconda.Modules.Localization", "org.fedoraproject.Anaconda.Modules.Timezone"]
+disable = ["org.fedoraproject.Anaconda.Modules.Users"]
+
+[customizations.iso]
+volume_id = "Fedora-BootC-Desktop"
+application_id = "LawiKOS"
+publisher = "Loic Dubard"
+
+# [[customizations.filesystem]]
+# mountpoint = "/"
+# minsize = "5 GiB"
+
+# [[customizations.filesystem]]
+# mountpoint = "/var"
+# minsize = "1 GiB"
+
+
+[customizations.installer.kickstart]
+contents = '''
+text
+timezone Europe/Paris
+rootpw --lock
+
+%pre --erroronfail --log=/tmp/ks-pre.log
+exec < /dev/tty6 > /dev/tty6 2> /dev/tty6
+chvt 6
+cat /usr/bin/custom_part.py | python3
+chvt 1
+exec < /dev/tty1 > /dev/tty1 2> /dev/tty1
+%end
+
+%include /tmp/partitioning.ks
+
+reboot --eject
+'''

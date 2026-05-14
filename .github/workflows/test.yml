@@ -1,0 +1,62 @@
+name: test Build
+
+on: [push]
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete huge unnecessary tools folder
+        run: rm -rf /opt/hostedtoolcache
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: downcase OWNER
+        run: |
+          echo "OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')" >>${GITHUB_ENV}
+
+      - name: Build, rechunk, the base image
+        uses: jharmison-redhat/action-bootc-build@v1
+        with:
+          context: ./base
+          push: "false"
+          tag: ghcr.io/${{ env.OWNER }}/fedora-bootc-base:${{ github.ref_name }}
+          rechunk-image: "quay.io/centos-bootc/centos-bootc:stream10"
+          # cache-repo: ghcr.io/${{ env.OWNER }}/fedora-bootc-base/cache # optional repository reference to store tags for layer cache
+
+      - name: Build, rechunk, the installer image
+        uses: jharmison-redhat/action-bootc-build@v1
+        with:
+          context: ./installer
+          push: "false"
+          extra-args: "--build-arg VERSION=${{ github.ref_name }}"
+          tag: ghcr.io/${{ env.OWNER }}/fedora-bootc-installer:${{ github.ref_name }}
+          rechunk-image: "quay.io/centos-bootc/centos-bootc:stream10"
+          # cache-repo: ghcr.io/${{ env.OWNER }}/fedora-bootc-installer/cache # optional repository reference to store tags for layer cache
+
+      - name: Build, rechunk, the desktop image
+        uses: jharmison-redhat/action-bootc-build@v1
+        with:
+          context: ./desktop
+          push: "false"
+          tag: ghcr.io/${{ env.OWNER }}/fedora-bootc-desktop:${{ github.ref_name }}
+          rechunk-image: "quay.io/centos-bootc/centos-bootc:stream10"
+          # cache-repo: ghcr.io/${{ env.OWNER }}/fedora-bootc-desktop/cache # optional repository reference to store tags for layer cache
+
+      - name: Build, rechunk, the server image
+        uses: jharmison-redhat/action-bootc-build@v1
+        with:
+          context: ./server
+          push: "false"
+          tag: ghcr.io/${{ env.OWNER }}/fedora-bootc-server:${{ github.ref_name }}
+          rechunk-image: "quay.io/centos-bootc/centos-bootc:stream10"
+          # cache-repo: ghcr.io/${{ env.OWNER }}/fedora-bootc-server/cache # optional repository reference to store tags for layer cache

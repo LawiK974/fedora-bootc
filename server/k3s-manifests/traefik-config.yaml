@@ -1,0 +1,38 @@
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    additionalArguments:
+      - --api.insecure=true
+      - --serversTransport.insecureSkipVerify=true
+    deployment:
+      kind: DaemonSet
+    service:
+      spec:
+        type: NodePort
+        # externalTrafficPolicy: Local
+      # annotations:
+      #   kube-vip.io/loadbalancerIPs: {{ services_vip }}
+    ports:
+      websecure:
+        nodePort: 443
+        middlewares:
+          - default-secured@kubernetescrd
+      web:
+        nodePort: 80
+        middlewares:
+          - default-redirect-https@kubernetescrd
+          - default-test-ratelimit@kubernetescrd
+    affinity:
+      nodeAffinity:
+        requiredDuringSchedulingIgnoredDuringExecution:
+          nodeSelectorTerms:
+          - matchExpressions:
+            - key: node-role.kubernetes.io/master
+              operator: Exists
+          - matchExpressions:
+            - key: node-role.kubernetes.io/control-plane
+              operator: Exists

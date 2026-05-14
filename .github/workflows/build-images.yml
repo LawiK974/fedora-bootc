@@ -1,0 +1,115 @@
+name: Build and Publish Bootc images
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    tags:
+      - "v*"
+  schedule:
+    - cron: "0 3 * * 1" # every Monday at 3:00 AM
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log in to ghcr.io
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ghcr.io # or any other registry
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # https://github.com/orgs/community/discussions/25678
+      - name: Delete huge unnecessary tools folder
+        run: rm -rf /opt/hostedtoolcache
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: downcase OWNER
+        run: |
+          echo "OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')" >>${GITHUB_ENV}
+
+      - name: Build, rechunk, and push the base image
+        uses: jharmison-redhat/action-bootc-build@v1
+        with:
+          context: ./base
+          push: "true"
+          tag: ghcr.io/${{ env.OWNER }}/fedora-bootc-base:${{ github.ref_name }}
+          rechunk-image: "quay.io/centos-bootc/centos-bootc:stream10"
+          # cache-repo: ghcr.io/${{ env.OWNER }}/fedora-bootc-base/cache # optional repository reference to store tags for layer cache
+
+      - name: Build, rechunk, and push the installer image
+        uses: jharmison-redhat/action-bootc-build@v1
+        with:
+          context: ./installer
+          push: "true"
+          extra-args: "--build-arg VERSION=${{ github.ref_name }}"
+          tag: ghcr.io/${{ env.OWNER }}/fedora-bootc-installer:${{ github.ref_name }}
+          rechunk-image: "quay.io/centos-bootc/centos-bootc:stream10"
+          # cache-repo: ghcr.io/${{ env.OWNER }}/fedora-bootc-installer/cache # optional repository reference to store tags for layer cache
+
+      - name: Build, rechunk, and push the desktop image
+        uses: jharmison-redhat/action-bootc-build@v1
+        with:
+          context: ./desktop
+          push: "true"
+          tag: ghcr.io/${{ env.OWNER }}/fedora-bootc-desktop:${{ github.ref_name }}
+          rechunk-image: "quay.io/centos-bootc/centos-bootc:stream10"
+          # cache-repo: ghcr.io/${{ env.OWNER }}/fedora-bootc-desktop/cache # optional repository reference to store tags for layer cache
+
+      - name: Build, rechunk, and push the server image
+        uses: jharmison-redhat/action-bootc-build@v1
+        with:
+          context: ./server
+          push: "true"
+          tag: ghcr.io/${{ env.OWNER }}/fedora-bootc-server:${{ github.ref_name }}
+          rechunk-image: "quay.io/centos-bootc/centos-bootc:stream10"
+          # cache-repo: ghcr.io/${{ env.OWNER }}/fedora-bootc-server/cache # optional repository reference to store tags for layer cache
+
+      - name: Build ISO Desktop
+        id: build-iso-desktop
+        uses: osbuild/bootc-image-builder-action@v0.0.2
+        with:
+          builder-image: quay.io/centos-bootc/bootc-image-builder:latest
+          config-file: ./desktop/installer-config.toml
+          image: ghcr.io/${{ env.OWNER }}/fedora-bootc-installer:${{ github.ref_name }}
+          additional-args: |
+            --installer-payload-ref ghcr.io/${{ env.OWNER }}/fedora-bootc-desktop:${{ github.ref_name }}
+          types: |
+            bootc-installer
+
+      - name: Upload ISO Desktop
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso
+          path: ${{ steps.build-iso-desktop.outputs.output-directory }}
+          if-no-files-found: error
+
+      - name: Build ISO server
+        id: build-iso-server
+        uses: osbuild/bootc-image-builder-action@v0.0.2
+        with:
+          builder-image: quay.io/centos-bootc/bootc-image-builder:latest
+          config-file: ./server/installer-config.toml
+          image: ghcr.io/${{ env.OWNER }}/fedora-bootc-installer:${{ github.ref_name }}
+          additional-args: |
+            --installer-payload-ref ghcr.io/${{ env.OWNER }}/fedora-bootc-server:${{ github.ref_name }}
+          types: |
+            bootc-installer
+
+      - name: Upload ISO Server
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso
+          path: ${{ steps.build-iso-server.outputs.output-directory }}
+          if-no-files-found: error
